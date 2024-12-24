@@ -1,0 +1,1 @@
+from .fritz import FritzBox

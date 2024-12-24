@@ -1,0 +1,19 @@
+[project]
+name = "auth-proxy"
+version = "0.1.0"
+dependencies = [
+    "mitmproxy",
+    "pydantic",
+    "typing-extensions; python_version < '3.11'",
+]
+requires-python = ">= 3.10"
+
+[project.scripts]
+auth-proxy = "auth_proxy.main:main"
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.flake8]
+per-file-ignores = ["__init__.py:F401"]
+max-line-length = 120
