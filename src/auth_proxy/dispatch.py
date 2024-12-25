@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from typing import Callable
 from importlib import import_module
 from mitmproxy.http import Response
-from mitmproxy.http import HTTPFlow
 
 from .api import AuthHandler
 from .data_models import HandlerDefinition

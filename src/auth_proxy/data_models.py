@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Any
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -10,9 +11,9 @@ class HandlerDefinition(BaseModel):
 
 class HostDefinition(BaseModel):
     handler: HandlerDefinition
-    host: str | None = None
+    host: Optional[str] = None
     path: str = ''
-    description: str | None = None
+    description: Optional[str] = None
 
 
 class AuthProxyConfig(BaseModel):

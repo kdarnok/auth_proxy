@@ -5,8 +5,9 @@ dependencies = [
     "mitmproxy",
     "pydantic",
     "typing-extensions; python_version < '3.11'",
+    "pyyaml",
 ]
-requires-python = ">= 3.10"
+requires-python = ">= 3.9"
 
 [project.scripts]
 auth-proxy = "auth_proxy.main:main"

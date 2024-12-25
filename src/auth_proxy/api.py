@@ -1,6 +1,7 @@
 from typing import Callable
 from typing import TypeVar
 from typing import Sequence
+from typing import Optional
 from typing_extensions import Self
 from types import MethodType
 from dataclasses import dataclass
@@ -25,7 +26,7 @@ class AuthHandler:
     Handlers are declared using the `@RequestHandler` and `@ResponseHandler` decorators, both
     of which can be passed a `path` and a `state`.
     """
-    response_handlers: dict | None = None  # XXX typing
+    response_handlers: Optional[dict] = None  # XXX typing
     dependencies: dict
 
     def __init__(self, config: dict):
@@ -68,8 +69,8 @@ class AuthHandler:
 
 @dataclass
 class ResponseHandler:
-    path: str | None = None
-    state: str | None = None
+    path: Optional[str] = None
+    state: Optional[str] = None
 
     def __post_init__(self):
         self.func = None
@@ -84,7 +85,7 @@ class ResponseHandler:
         self.func = func
         return self
 
-    def __get__(self, obj: AuthHandler, objtype: type[AuthHandler] | None = None) -> MethodType:
+    def __get__(self, obj: AuthHandler, objtype: Optional[type[AuthHandler]] = None) -> MethodType:
         assert self.func
         return MethodType(self.func, obj)
 

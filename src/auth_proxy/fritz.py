@@ -1,3 +1,4 @@
+from typing import Optional
 import re
 from hashlib import md5
 
@@ -17,7 +18,7 @@ class FritzBox(AuthHandler):
         # XXX if returned flow is parent: parent.resume(); also not state should be present
 
     @ResponseHandler(path='/')
-    def handle_root_response(self, flow: HTTPFlow) -> tuple[HTTPFlow, str] | None:
+    def handle_root_response(self, flow: HTTPFlow) -> Optional[tuple[HTTPFlow, str]]:
         assert flow.response
         if (m := re.search(r'"challenge":"(.+?)"', flow.response.text or '')):
             response = make_challenge_response(m.group(1), self.config['password'])
