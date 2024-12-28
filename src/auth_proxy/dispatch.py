@@ -3,7 +3,7 @@ from __future__ import annotations
 from importlib import import_module
 from mitmproxy.http import Response
 
-from .api import AuthHandler
+from .auth_handler import AuthHandler
 from .data_models import HandlerDefinition
 from .data_models import AuthConfig
 
@@ -22,14 +22,6 @@ class AuthDispatch:
             for name, host_definition in config.hosts.items()
         }
         self.config = config
-
-    # def load(self, loader):
-    #     loader.add_option(
-    #         name='tld',
-    #         typespec=str,
-    #         default='skynet',
-    #         help='Top-level domain name to expose the proxied hosts at.',
-    #     )
 
     def request(self, flow):
         tld = self.config.tld
@@ -57,6 +49,9 @@ class AuthDispatch:
                 )
                 return
             flow.request.host = hostname
+
+            if (handler := self.handlers.get(flow.request.host)):
+                handler.request(flow)
 
     def response(self, flow):
         if (handler := self.handlers.get(flow.request.host)):

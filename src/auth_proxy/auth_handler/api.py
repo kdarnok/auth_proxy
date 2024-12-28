@@ -2,6 +2,7 @@ from typing import Callable
 from typing import TypeVar
 from typing import Sequence
 from typing import Optional
+from typing import ClassVar
 from typing_extensions import Self
 from types import MethodType
 from dataclasses import dataclass
@@ -26,12 +27,23 @@ class AuthHandler:
     Handlers are declared using the `@RequestHandler` and `@ResponseHandler` decorators, both
     of which can be passed a `path` and a `state`.
     """
-    response_handlers: Optional[dict] = None  # XXX typing
+    handlers: Optional[dict[str, dict[tuple[str | None, str | None], str]]] = None
     dependencies: dict
 
     def __init__(self, config: dict):
         self.dependencies = {}
+        if not self.handlers:
+            self.handlers = {}
         self.config = config
+
+    def request(self, flow: HTTPFlow) -> HTTPFlow:
+        # don't need more complex request handling for now
+        if not self.handlers:
+            return flow
+        rh = self.handlers.get('request', {})
+        if (handler := rh.get((None, None))):
+            getattr(self, handler)(flow)
+        return flow
 
     def response(self, flow: HTTPFlow) -> HTTPFlow:
         if flow in self.dependencies:
@@ -39,7 +51,10 @@ class AuthHandler:
         else:
             parent, state = None, None
 
-        rh = self.response_handlers or {}
+        if not self.handlers:
+            return flow
+
+        rh = self.handlers.get('response', {})
         for key in ((None, state), (flow.request.path, state)):
             if (handler := rh.get(key)):
                 break
@@ -56,29 +71,35 @@ class AuthHandler:
             new_flow, state = _res, None
 
         if new_flow is not flow:
-            # flow.intercept()  # A1
-            self.dependencies[new_flow] = (flow, state)
+            self.dependencies[new_flow] = (parent or flow, state)
+        else:
+            new_flow.resume()
+
         if new_flow is parent:
             new_flow.resume()
         if new_flow.response is None:
-            new_flow.resume()  # A1
+            new_flow.request.is_custom = True
+            new_flow.is_replay = None
+            new_flow.resume()
+            ctx.options.client_replay_concurrency = -1
             ctx.master.commands.call('replay.client', [new_flow])
 
         return new_flow
 
 
 @dataclass
-class ResponseHandler:
+class HandlerRegistration:
     path: Optional[str] = None
     state: Optional[str] = None
+    event: ClassVar[str]
 
     def __post_init__(self):
         self.func = None
 
     def __set_name__(self, cls: AuthHandler, name: str):
-        if cls.response_handlers is None:
-            cls.response_handlers = {}
-        cls.response_handlers[(self.path, self.state)] = name
+        if cls.handlers is None:
+            cls.handlers = {}
+        cls.handlers.setdefault(self.event, {})[(self.path, self.state)] = name
 
     def __call__(self, func: Callable) -> Self:
         assert not self.func
@@ -88,6 +109,14 @@ class ResponseHandler:
     def __get__(self, obj: AuthHandler, objtype: Optional[type[AuthHandler]] = None) -> MethodType:
         assert self.func
         return MethodType(self.func, obj)
+
+
+class RequestHandler(HandlerRegistration):
+    event = 'request'
+
+
+class ResponseHandler(HandlerRegistration):
+    event = 'response'
 
 
 def call_with_args(func: Callable[..., T], args: Sequence) -> T:
