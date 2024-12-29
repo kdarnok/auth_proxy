@@ -1,4 +1,3 @@
-from typing import Optional
 import re
 from hashlib import md5
 
@@ -9,37 +8,19 @@ from .api import ResponseHandler
 
 
 class FritzBox(AuthHandler):
-    @ResponseHandler(state='pwd')
-    def handle_pwd_response(self, flow: HTTPFlow, parent: HTTPFlow) -> HTTPFlow:
-        assert flow.response
-        parent.response = flow.response.copy()
-        return parent
+    def handle_response(self, parent: HTTPFlow) -> ResponseHandler:
+        assert parent.response
+        if parent.request.path == '/' and (m := re.search(r'"challenge":"(.+?)"', parent.response.text or '')):
+            request = parent.request.copy()
+            request.path = '/index.lua'
+            request.method = 'POST'
+            request.urlencoded_form['username'] = self.config['username']
+            request.urlencoded_form['lp'] = ''
+            request.urlencoded_form['response'] = make_challenge_response(m.group(1), self.config['password'])
 
-        # XXX if returned flow is parent: parent.resume(); also not state should be present
+            response = yield request
 
-    @ResponseHandler(path='/')
-    def handle_root_response(self, flow: HTTPFlow) -> Optional[tuple[HTTPFlow, str]]:
-        assert flow.response
-        if (m := re.search(r'"challenge":"(.+?)"', flow.response.text or '')):
-            response = make_challenge_response(m.group(1), self.config['password'])
-
-            flow = flow.copy()
-            flow.request.path = '/index.lua'
-            flow.request.method = 'POST'
-            flow.request.urlencoded_form['username'] = 'fritz.box'
-            flow.request.urlencoded_form['lp'] = ''
-            flow.request.urlencoded_form['response'] = response
-            flow.response = None
-
-            return flow, 'pwd'
-
-            # XXX returned flow is not flow --> intercept
-            # flow.intercept()
-            # XXX has no response, so need to inject new flow
-            # ctx.master.commands.call("replay.client", [auth_flow])
-
-        return None
-        # XXX not return flow --> continue with flow
+            parent.response = response.copy()
 
 
 def make_challenge_response(challenge: str, pwd: str) -> str:

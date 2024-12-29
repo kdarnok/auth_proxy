@@ -4,7 +4,6 @@ version = "0.1.0"
 dependencies = [
     "mitmproxy",
     "pydantic>=2.0.0",
-    "typing-extensions; python_version < '3.11'",
     "pyyaml",
     "passlib",
 ]

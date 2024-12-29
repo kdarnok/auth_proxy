@@ -1,18 +1,19 @@
 from typing import Callable
 from typing import TypeVar
 from typing import Sequence
-from typing import Optional
-from typing import ClassVar
-from typing_extensions import Self
-from types import MethodType
-from dataclasses import dataclass
+from typing import Generator
+from typing import TypeAlias
+from functools import partial
 from inspect import signature
 
 from mitmproxy import ctx
 from mitmproxy.http import HTTPFlow
+from mitmproxy.http import Request
+from mitmproxy.http import Response
 
 
 T = TypeVar('T')
+ResponseHandler: TypeAlias = Generator[Request, Response, None]
 
 
 class AuthHandler:
@@ -27,96 +28,50 @@ class AuthHandler:
     Handlers are declared using the `@RequestHandler` and `@ResponseHandler` decorators, both
     of which can be passed a `path` and a `state`.
     """
-    handlers: Optional[dict[str, dict[tuple[str | None, str | None], str]]] = None
     dependencies: dict
 
     def __init__(self, config: dict):
+        ctx.options.client_replay_concurrency = -1
         self.dependencies = {}
-        if not self.handlers:
-            self.handlers = {}
         self.config = config
 
     def request(self, flow: HTTPFlow) -> HTTPFlow:
         # don't need more complex request handling for now
-        if not self.handlers:
-            return flow
-        rh = self.handlers.get('request', {})
-        if (handler := rh.get((None, None))):
-            getattr(self, handler)(flow)
+        self.handle_request(flow.request)
         return flow
 
-    def response(self, flow: HTTPFlow) -> HTTPFlow:
+    def response(self, flow: HTTPFlow) -> None:
         if flow in self.dependencies:
-            parent, state = self.dependencies[flow]
+            parent, active_handler = self.dependencies.pop(flow)
+            next_request = partial(active_handler.send, flow.response)
         else:
-            parent, state = None, None
+            parent = flow
+            active_handler = self.handle_response(flow)
+            next_request = partial(next, active_handler)
 
-        if not self.handlers:
-            return flow
-
-        rh = self.handlers.get('response', {})
-        for key in ((None, state), (flow.request.path, state)):
-            if (handler := rh.get(key)):
-                break
-        else:
+        flow.intercept()
+        try:
+            new_request = next_request()
+        except StopIteration:
+            parent.resume()
             return
 
-        flow.intercept()  # A1
-        handler_func = getattr(self, handler)
-        _res = call_with_args(handler_func, (flow, parent))
+        new_flow = make_request(parent, new_request)
+        ctx.master.commands.call('replay.client', [new_flow])
+        self.dependencies[new_flow] = (parent, active_handler)
 
-        if isinstance(_res, tuple):
-            new_flow, state = _res
-        else:
-            new_flow, state = _res, None
+    def handle_request(self, request: Request):
+        pass
 
-        if new_flow is not flow:
-            self.dependencies[new_flow] = (parent or flow, state)
-        else:
-            new_flow.resume()
-
-        if new_flow is parent:
-            new_flow.resume()
-        if new_flow.response is None:
-            new_flow.request.is_custom = True
-            new_flow.is_replay = None
-            new_flow.resume()
-            ctx.options.client_replay_concurrency = -1
-            ctx.master.commands.call('replay.client', [new_flow])
-
-        return new_flow
+    def handle_response(self, parent: HTTPFlow) -> ResponseHandler:
+        return
+        yield
 
 
-@dataclass
-class HandlerRegistration:
-    path: Optional[str] = None
-    state: Optional[str] = None
-    event: ClassVar[str]
-
-    def __post_init__(self):
-        self.func = None
-
-    def __set_name__(self, cls: AuthHandler, name: str):
-        if cls.handlers is None:
-            cls.handlers = {}
-        cls.handlers.setdefault(self.event, {})[(self.path, self.state)] = name
-
-    def __call__(self, func: Callable) -> Self:
-        assert not self.func
-        self.func = func
-        return self
-
-    def __get__(self, obj: AuthHandler, objtype: Optional[type[AuthHandler]] = None) -> MethodType:
-        assert self.func
-        return MethodType(self.func, obj)
-
-
-class RequestHandler(HandlerRegistration):
-    event = 'request'
-
-
-class ResponseHandler(HandlerRegistration):
-    event = 'response'
+def make_request(flow, request):
+    new_flow = HTTPFlow(flow.client_conn, flow.server_conn)
+    new_flow.request = request.copy()
+    return new_flow
 
 
 def call_with_args(func: Callable[..., T], args: Sequence) -> T:

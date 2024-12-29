@@ -1,77 +1,52 @@
-from copy import deepcopy
 from hashlib import sha512
 from mitmproxy.http import HTTPFlow
+from mitmproxy.http import Request
 from passlib.utils.pbkdf2 import pbkdf2
 
 from .api import AuthHandler
-from .api import RequestHandler
 from .api import ResponseHandler
 
 
 class Sonnen(AuthHandler):
     token = None
 
-    @RequestHandler()
-    def handle_request(self, flow: HTTPFlow):
+    def handle_request(self, request: Request):
         # after authentication, attach token to every request
         if self.token:
-            flow.request.cookies['authenticationToken'] = self.token
-            flow.request.headers['Auth-Token'] = self.token
+            request.cookies['authenticationToken'] = self.token
+            request.headers['Auth-Token'] = self.token
 
-    @ResponseHandler(path='/api/challenge', state='pwd')
-    def handle_challenge(self, flow, parent):
-        challenge = flow.response.json()
-        response = make_challenge_response(challenge, self.config['password'])
-        auth_flow = copy_request(parent)
-        auth_flow.request.path = '/api/session'
-        auth_flow.request.method = 'POST'
-        auth_flow.request.urlencoded_form['user'] = 'User'
-        auth_flow.request.urlencoded_form['challenge'] = challenge.encode()
-        auth_flow.request.urlencoded_form['response'] = response.encode()
-        return auth_flow, 'session'
-
-    @ResponseHandler(path='/api/session', state='session')
-    def handle_session(self, flow, parent):
-        token = flow.response.json()['authentication_token']
-        repeat = copy_request(parent)
-        repeat.request.cookies['authenticationToken'] = token
-        repeat.request.headers['Auth-Token'] = token
-        self.token = token
-        return repeat, 'token'
-
-    @ResponseHandler(state='token')
-    def handle_token(self, flow, parent):
-        repeat = copy_request(parent)
-        repeat.request.cookies['authenticationToken'] = self.token
-        repeat.request.headers['Auth-Token'] = self.token
-        return repeat, 'repeat'
-
-    @ResponseHandler(state='repeat')
-    def handle_repeat(self, flow, parent):
-        parent.response = flow.response.copy()
-        return parent
-
-    @ResponseHandler()
-    def handle_root(self, flow):
+    def handle_response(self, parent: HTTPFlow) -> ResponseHandler:
         if self.token:
-            flow.response.headers['Set-Cookie'] = f'authenticationToken={self.token}'
+            parent.response.headers['Set-Cookie'] = f'authenticationToken={self.token}'
 
-        if flow.request.path.startswith('/api/') and flow.response.status_code == 401:
+        assert parent.response
+        if parent.request.path.startswith('/api/') and parent.response.status_code == 401:
             # or ('authenticationToken' not in flow.request.cookies and 'Auth-Token' not in flow.request.headers):
-            auth_flow = flow.copy()
-            auth_flow.request.path = '/api/challenge'
-            auth_flow.request.method = 'GET'
-            auth_flow.request.text = ''
-            auth_flow.response = None
-            auth_flow = copy_request(auth_flow)
-            return auth_flow, 'pwd'
-        return flow
+            auth = parent.request.copy()
+            auth.path = '/api/challenge'
+            auth.method = 'GET'
+            auth.text = ''
 
+            auth_response = yield auth
 
-def copy_request(flow):
-    new_flow = HTTPFlow(flow.client_conn, flow.server_conn)
-    new_flow.request = deepcopy(flow.request)
-    return new_flow
+            challenge = auth_response.json()
+            response = make_challenge_response(challenge, self.config['password'])
+            session_request = parent.request.copy()
+            session_request.path = '/api/session'
+            session_request.method = 'POST'
+            session_request.urlencoded_form['user'] = 'User'
+            session_request.urlencoded_form['challenge'] = challenge
+            session_request.urlencoded_form['response'] = response
+
+            session_response = yield session_request
+
+            self.token = session_response.json()['authentication_token']
+            repeat_request = parent.request.copy()
+
+            repeat_response = yield repeat_request  # authentication via request handler
+
+            parent.response = repeat_response.copy()
 
 
 def make_challenge_response(challenge: str, password: str) -> str:
