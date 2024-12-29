@@ -27,5 +27,6 @@ async def run(config_file: str):
 
     opts = options.Options(**config.proxy)
     m = DumpMaster(opts)
+    m.options.validate_inbound_headers = False  # zyxel switch sends some invalid headers
     m.addons.add(AuthDispatch(config.auth))
     await m.run()

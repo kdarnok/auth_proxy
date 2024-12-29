@@ -23,7 +23,7 @@ class AuthDispatch:
         }
         self.config = config
 
-    async def request(self, flow):
+    def request(self, flow):
         tld = self.config.tld
         if flow.request.host == tld:
             # landing page with links to all services
@@ -53,7 +53,7 @@ class AuthDispatch:
             if (handler := self.handlers.get(flow.request.host)):
                 handler.request(flow)
 
-    async def response(self, flow):
+    def response(self, flow):
         if (handler := self.handlers.get(flow.request.host)):
             handler.response(flow)
 
