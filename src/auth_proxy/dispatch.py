@@ -28,7 +28,7 @@ class AuthDispatch:
         if flow.request.host == tld:
             # landing page with links to all services
             menu = ''.join(
-                f'<li><a href="http://{name}.{tld}/{host.path}">{host.description}</a></li>\n'
+                f'<li><a href="http://{name}.{tld}{host.path}">{host.description}</a></li>\n'
                 for name, host in self.config.hosts.items()
             )
             flow.response = Response.make(

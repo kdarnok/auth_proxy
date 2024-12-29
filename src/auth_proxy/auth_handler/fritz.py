@@ -24,6 +24,5 @@ class FritzBox(AuthHandler):
 
 
 def make_challenge_response(challenge: str, pwd: str) -> str:
-    # dotted = ''.join('.' if ord(c) > 255 else c for c in pwd)
     p = (challenge + '-' + pwd).encode('utf-16-le')
     return challenge + '-' + md5(p).hexdigest()
