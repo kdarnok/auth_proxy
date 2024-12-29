@@ -2,7 +2,6 @@ from typing import Callable
 from typing import TypeVar
 from typing import Sequence
 from typing import Generator
-from typing import TypeAlias
 from functools import partial
 from inspect import signature
 
@@ -13,7 +12,7 @@ from mitmproxy.http import Response
 
 
 T = TypeVar('T')
-ResponseHandler: TypeAlias = Generator[Request, Response, None]
+ResponseHandler = Generator[Request, Response, None]
 
 
 class AuthHandler:
