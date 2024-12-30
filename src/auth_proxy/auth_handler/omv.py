@@ -8,10 +8,14 @@ from .api import ResponseHandler
 
 class OpenMediaVault(AuthHandler):
     def handle_response(self, parent: HTTPFlow) -> ResponseHandler:
-        assert parent.response and parent.response.text
+        assert parent.response
 
         if (
-            (parent.request.path == '/' and 'Ext.create("OMV.window.Login"' in parent.response.text)
+            (
+                parent.request.path == '/'
+                and parent.response.text
+                and 'Ext.create("OMV.window.Login"' in parent.response.text
+            )
             or parent.response.status_code == 401
         ):
             auth = parent.request.copy()
