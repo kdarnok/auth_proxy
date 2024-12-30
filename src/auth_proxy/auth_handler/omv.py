@@ -1,6 +1,8 @@
 from json import dumps
 
 from mitmproxy.http import HTTPFlow
+from mitmproxy.http import Request
+from mitmproxy.http import Response
 
 from .api import AuthHandler
 from .api import ResponseHandler
@@ -41,14 +43,14 @@ class OpenMediaVault(AuthHandler):
             parent.response.headers.set_all('Set-Cookie', auth_response.headers.get_all('Set-Cookie'))
 
 
-def get_set_cookies(response):
+def get_set_cookies(response: Response) -> dict[str, str]:
     return dict(
         cookie.split(';', 1)[0].split('=', 1)
         for cookie in response.headers.get_all('Set-Cookie')
     )
 
 
-def get_cookies(request):
+def get_cookies(request: Request) -> dict[str, str]:
     if not (cookies := request.headers.get('Cookie')):
         return {}
     return {
@@ -58,6 +60,6 @@ def get_cookies(request):
     }
 
 
-def set_cookies(request, cookies):
+def set_cookies(request: Request, cookies: dict[str, str]):
     new_cookies = {**get_cookies(request), **cookies}
     request.headers['Cookie'] = ';'.join(map('='.join, new_cookies.items()))
