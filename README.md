@@ -74,6 +74,14 @@ auth:
                 config:
                     password: <password>
             description: Zyxel GS1900 switch
+
+        omv:
+            handler:
+                cls: auth_proxy.OpenMediaVault
+                config:
+                    username: <omv user name>
+                    password: <password>
+            description: OMV storage
 ```
 
 For each host to be covered by the proxy, a handler (by means of a dotted python path to
