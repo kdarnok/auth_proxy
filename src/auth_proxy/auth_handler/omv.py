@@ -26,7 +26,11 @@ class OpenMediaVault(AuthHandler):
             auth.text = dumps({
                 'service': 'Session',
                 'method': 'login',
-                'params': {'username': 'admin', 'password': self.config['password'], 'options': None},
+                'params': {
+                    'username': self.config['username'],
+                    'password': self.config['password'],
+                    'options': None,
+                },
             })
             auth.headers['Content-Type'] = 'aplication/json'
 
